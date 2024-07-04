@@ -5,45 +5,51 @@ using Equilobe.Core.Shared;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace Equilobe.Core.DomainEvents;
-
-public class BookReturnedEvent : INotification
+namespace Equilobe.Core.DomainEvents
 {
-    public Guid BookId { get; }
-    public DateTime ReturnDate { get; }
-    public BookQualityState QualityState { get; }
-    public BookReturnedEvent(Guid bookId, BookQualityState qualityState, DateTime returnDate)
+    public class BookReturnedEvent : INotification
     {
-        BookId = bookId;
-        QualityState = qualityState;
-        ReturnDate = returnDate;
-    }
-}
+        public Guid BookId { get; }
+        public DateTime ReturnDate { get; }
+        public BookQualityState QualityState { get; }
 
-public class BookReturnedEventHandler : INotificationHandler<BookReturnedEvent>
-{
-    private readonly ILibraryDbContext _dbContext;
-
-    public BookReturnedEventHandler(ILibraryDbContext dbContext)
-    {
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        public BookReturnedEvent(Guid bookId, BookQualityState qualityState, DateTime returnDate)
+        {
+            BookId = bookId;
+            QualityState = qualityState;
+            ReturnDate = returnDate;
+        }
     }
 
-    public async Task Handle(BookReturnedEvent notification, CancellationToken cancellationToken)
+    public class BookReturnedEventHandler : INotificationHandler<BookReturnedEvent>
     {
-        var bookTask = _dbContext.Books
-            .FirstOrDefaultAsync(b => b.Id == notification.BookId, cancellationToken);
-        var loanTask = _dbContext.Loans
-            .FirstOrDefaultAsync(b => b.BookId == notification.BookId, cancellationToken);        
-        var book = await bookTask ?? throw new KeyNotFoundException(nameof(BookMetadata));
-        var loan = await loanTask ?? throw new KeyNotFoundException(nameof(Loan));
+        private readonly ILibraryDbContext _dbContext;
+        private readonly IPenaltyCalculator _penaltyCalculator;
 
-        var differenceQualityState = notification.QualityState - book.QualityState;
+        public BookReturnedEventHandler(ILibraryDbContext dbContext, IPenaltyCalculator penaltyCalculator)
+        {
+            _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+            _penaltyCalculator = penaltyCalculator ?? throw new ArgumentNullException(nameof(penaltyCalculator));
+        }
 
-        loan.CalculatePenalty(book.RentPrice, differenceQualityState);
+        public async Task Handle(BookReturnedEvent notification, CancellationToken cancellationToken)
+        {
+            var book = await _dbContext.Books
+                .FirstOrDefaultAsync(b => b.Id == notification.BookId, cancellationToken)
+                ?? throw new KeyNotFoundException(nameof(Book));
 
-        book.ReturnBook(notification.QualityState);
+            var loan = await _dbContext.Loans
+                .FirstOrDefaultAsync(l => l.BookId == notification.BookId, cancellationToken)
+                ?? throw new KeyNotFoundException(nameof(Loan));
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+            var differenceQualityState = notification.QualityState - book.QualityState;
+            var penalty = _penaltyCalculator.CalculatePenalty(book.RentPrice, differenceQualityState, loan.DueDate, notification.ReturnDate);
+
+            loan.ReturnBook(notification.QualityState, notification.ReturnDate, penalty);
+
+            book.ReturnBook(notification.QualityState);
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
     }
 }

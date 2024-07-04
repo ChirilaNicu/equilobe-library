@@ -24,8 +24,10 @@ public class LoanBookCommandHandler : IRequestHandler<LoanBookCommand>
     public async Task Handle(LoanBookCommand request, CancellationToken cancellationToken)
     {
         var user = await _dbContext.Users
-            .FirstOrDefaultAsync(u => u.Username == request.Username, cancellationToken)
-            ?? throw new KeyNotFoundException(nameof(User));
+         .FirstOrDefaultAsync(u => u.Username == request.Username, cancellationToken)
+         ?? throw new KeyNotFoundException(nameof(User));
+
+
         var books = _dbContext.Books.Where(b => b.Metadata.ISBN == request.ISBN);
 
         // We take by default the best book to rent,

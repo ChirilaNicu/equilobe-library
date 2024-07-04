@@ -1,4 +1,5 @@
 ﻿using Equilobe.Core.Shared;
+using Equilobe.Core.Features.Loans;
 using Equilobe.Infrastructure.Data;
 using Equilobe.Infrastructure.Data.Interceptors;
 using Microsoft.EntityFrameworkCore;
@@ -16,7 +17,6 @@ public static class DependencyInjection
             ?? throw new ArgumentException("LibraryDatabase Connection String");
 
         services.AddScoped<ISaveChangesInterceptor, DispatchDomainEventsInterceptor>();
-
         services.AddDbContext<LibraryDbContext>((sp, options) =>
         {
             options.AddInterceptors(sp.GetServices<ISaveChangesInterceptor>());
@@ -26,5 +26,7 @@ public static class DependencyInjection
 
         services.AddScoped<ILibraryDbContext>(provider => provider.GetRequiredService<LibraryDbContext>());
         services.AddScoped<LibraryDbContextInitializer>();
+        services.AddScoped<IPenaltyCalculator, DefaultPenaltyCalculator>();
+
     }
 }

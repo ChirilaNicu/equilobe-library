@@ -1,6 +1,10 @@
 ﻿using Equilobe.Core.Shared.Models;
 using Equilobe.Core.Shared.SeedWork;
 using Equilobe.Core.DomainEvents;
+using Equilobe.Core.Features.Users;
+using Equilobe.Core.Features.Books;
+using Microsoft.VisualBasic;
+using Equilobe.Core.Shared;
 
 namespace Equilobe.Core.Features.Loans;
 
@@ -11,7 +15,9 @@ public class Loan : Entity, IAggregateRoot
     public DateTime LoanDate { get; private set; }
     public DateTime DueDate { get; private set; }
     public DateTime? ReturnDate { get; private set; }
-    public Money PaidAmount { get; private set; }
+    public Money PaidAmount { get; private set; } = null!;
+    public User User { get; private set; } = null!;
+    public Book Book { get; private set; } = null!;
 
     private Loan() { }
 
@@ -26,24 +32,39 @@ public class Loan : Entity, IAggregateRoot
         AddDomainEvent(new BookLoanedEvent(bookId));
     }
 
-    public void ReturnBook(BookQualityState qualityState, DateTime returnDate)
+    public void ReturnBook(BookQualityState qualityState, DateTime returnDate, decimal penalty)
     {
         ReturnDate = returnDate;
+        PaidAmount = new Money(penalty, Currency.RON);
         AddDomainEvent(new BookReturnedEvent(BookId, qualityState, returnDate));
     }
+}
 
-    public decimal CalculatePenalty(Money rentPrice, int differenceQualityState)
+public class DefaultPenaltyCalculator : IPenaltyCalculator
+{
+    public decimal CalculatePenalty(Money rentPrice, int differenceQualityState, DateTime dueDate, DateTime returnDate)
     {
         decimal totalAmount = 0;
         if (differenceQualityState > 2)
         {
-            //If the user return the book with another state that he previous loaned, he will pay the damage
             totalAmount = differenceQualityState * rentPrice.Amount * 0.2m; // 20% of rent price per difference quality state
         }
 
-        var overdueDays = (DateTime.UtcNow - DueDate).Days;
-        if (overdueDays > 0) totalAmount += overdueDays * (rentPrice.Amount * 0.01m); // 1% of rent price per day
-        PaidAmount = new Money(totalAmount, rentPrice.Currency);
+        var overdueDays = (returnDate - dueDate).Days;
+        if (overdueDays > 0)
+        {
+            totalAmount += overdueDays * (rentPrice.Amount * 0.01m); // 1% of rent price per day
+        }
         return totalAmount;
+    }
+}
+public class SimplePenaltyCalculator : IPenaltyCalculator
+{
+    public decimal CalculatePenalty(Money rentPrice, int differenceQualityState, DateTime dueDate, DateTime returnDate)
+    {
+        var overdueDays = (returnDate - dueDate).Days;
+        if (overdueDays <= 0) return 0;
+
+        return overdueDays * (rentPrice.Amount * 0.01m); // 1% of rent price per day
     }
 }

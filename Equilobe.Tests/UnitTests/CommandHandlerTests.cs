@@ -13,6 +13,7 @@ namespace Equilobe.Tests.UnitTests
     public class CommandHandlerTests
     {
         private readonly Mock<ILibraryDbContext> _libraryDbContextMock;
+        private readonly Mock<IPenaltyCalculator> _penaltyCalculatorMock;
 
         private readonly AddBookCommandHandler _addBookHandler;
         private readonly DeleteBookCommandHandler _deleteBookHandler;
@@ -23,14 +24,15 @@ namespace Equilobe.Tests.UnitTests
         {
             // Arrange
             _libraryDbContextMock = new Mock<ILibraryDbContext>();
+            _penaltyCalculatorMock = new Mock<IPenaltyCalculator>();
 
             _addBookHandler = new AddBookCommandHandler(_libraryDbContextMock.Object);
             _deleteBookHandler = new DeleteBookCommandHandler(_libraryDbContextMock.Object);
             _loanBookCommandHandler = new LoanBookCommandHandler(_libraryDbContextMock.Object);
-            _returnBookCommandHandler = new ReturnBookCommandHandler(_libraryDbContextMock.Object);
+            _returnBookCommandHandler = new ReturnBookCommandHandler(_libraryDbContextMock.Object, _penaltyCalculatorMock.Object);
         }
 
-        [Fact]
+         [Fact]
         public async Task Should_Add_Book()
         {
             // Arrange
@@ -47,14 +49,13 @@ namespace Equilobe.Tests.UnitTests
             // Setup mock to simulate the behavior of the db
             var authorsMock = new List<Author>().AsQueryable().BuildMockDbSet();
             _libraryDbContextMock.Setup(db => db.Authors).Returns(authorsMock.Object);
-            _libraryDbContextMock.Setup(db => db.Books.AddAsync(It.IsAny<Book>(), It.IsAny<CancellationToken>())).Verifiable();
 
             // Act
             await _addBookHandler.Handle(command, CancellationToken.None);
 
             // Assert
-            _libraryDbContextMock.Verify(); // Verify that the repository’s AddBook method was called
-                                            // Add any additional assertions to check the result or any other side effects.
+            _libraryDbContextMock.Verify(db => db.Authors.Add(It.IsAny<Author>()), Times.Once);
+            _libraryDbContextMock.Verify(db => db.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
         }
 
         [Fact]

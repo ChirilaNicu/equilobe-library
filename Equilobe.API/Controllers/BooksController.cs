@@ -17,9 +17,26 @@ public class BooksController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetBooks()
+    public async Task<IActionResult> GetBooks(
+        [FromQuery] string? title,
+        [FromQuery] string? qualityState,
+        [FromQuery] bool? isAvailable,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10,
+        [FromQuery] string sortBy = "id",
+        [FromQuery] string sortDirection = "asc")
     {
-        var query = new GetBooksQuery();
+        var query = new GetBooksQuery
+        {
+            Title = title,
+            QualityState = qualityState,
+            IsAvailable = isAvailable,
+            PageNumber = pageNumber,
+            PageSize = pageSize,
+            SortBy = sortBy,
+            SortDirection = sortDirection
+        };
+
         var books = await _mediator.Send(query);
         return Ok(books);
     }
